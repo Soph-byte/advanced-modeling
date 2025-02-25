@@ -317,12 +317,12 @@ summary(model)
 The model is statistically significant, but the explained variance is moderate (35%). There are other factors that could influence the mental health score (e.g. age, relationship, university vs high school). The F-statistic significance test shows that the model is statistically significant overall (p \< 0.001). This means that at least one of the PCA components has a significant influence on Mental_Health_Score. Pc1 is highly statistically significant (p \< 0.001), showing that intensive social media use (high time, distraction, restlessness, use of Instagram, Snapchat, TikTok) is strongly associated with poorer mental health. In PC2 there is an increase by 1 unit leads to an increase in Mental_Health_Score by 0.18838 units. This is also statistically highly significant (p \< 0.001), but shows a slightly weaker effect than PC1. An increase in PC3 by 1 unit leads to an increase in Mental_Health_Score by 0.06019 units. This is statistically significant (p \< 0.05), but the effect is very weak.PC4,Pc5,Pc6 are not statistically significant.
 
 ## Clustering and Interpretation
+Ill only continue with the first three components, because of the previous analysis. 
 
 ```{r}
 
 pca_data <- data.frame(PC1 = pca$x[,1], PC2 = pca$x[,2], PC3 = pca$x[,3])
 
-pca_scaled <- scale(pca_data)
 
 fviz_nbclust(pca_scaled, kmeans, method = "wss")
 
@@ -330,59 +330,65 @@ fviz_nbclust(pca_scaled, kmeans, method = "silhouette")
 
 fviz_nbclust(pca_scaled, kmeans, method = "gap_stat", nboot = 500)
 
-
-
 ```
-
+- elbow plot shows a clear kink at k = 4
+- silhouette plot has its highest point at k = 4 (0.3)
+- gap plot shows the highest value at k = 4 (0.475)
 -\> all three methods (Elbow, Silhouette, Gap statistics) point to 4 clusters as the optimal choice
 
 ```{r}
 
-final_data_scaled <- scale(final_data %>% select(-Mental_Health_Score)) 
-
-fit_kmeans <- kmeans(final_data_scaled, centers = 4, nstart = 100)
+fit_kmeans <- kmeans(pca_scaled, centers = 4, nstart = 100)
 
 fit_kmeans$cluster
 
-
 final_data$Cluster <- as.factor(fit_kmeans$cluster)
+silhouette_score <- silhouette(fit_kmeans$cluster, dist(pca_data))
+mean(silhouette_score[, 3])  
 
-silhouette_score <- silhouette(fit_kmeans$cluster, dist(final_data_scaled))
-mean(silhouette_score[, 3]) 
 
 ```
+This value shows that the four clusters are moderately well separated, but there is some overlap or less clear boundaries
 
 ```{r}
 cluster_centers <- fit_kmeans$centers
 cluster_centers_df <- as.data.frame(cluster_centers)
 rownames(cluster_centers_df) <- paste("Cluster", 1:4)
-
-
 print(cluster_centers_df)
 
 ```
 
 ```{r}
-pca <- prcomp(final_data_scaled, center = TRUE, scale. = TRUE)
 
-pca_data <- data.frame(PC1 = pca$x[,1], PC2 = pca$x[,2], Cluster = final_data$Cluster)
-
-
+pca_data <- data.frame(PC1 = pca$x[,1], PC2 = pca$x[,2], PC3 = pca$x[,3], Cluster = fit_kmeans$cluster)
 ggplot(pca_data, aes(x = PC1, y = PC2, color = Cluster)) +
   geom_point(alpha = 0.7) +
-  labs(title = "PCA: Cluster Visualisierung", x = "PC1 (Social Media Nutzung)", y = "PC2 (Mentale Belastung)") +
+  labs(title = "PCA: Cluster Vizualisation", 
+       x = "PC1 (Social-Media-Intensity)", 
+       y = "PC2 (Mental Stress)") +
   theme_minimal()
 
-
+ggplot(pca_data, aes(x = PC3, y = PC1, color = Cluster)) +
+  geom_point(alpha = 0.7) +
+  labs(title = "PCA: Cluster Visualisierung (PC3 vs. PC1)", 
+       x = "PC3 (Platform Usage Type)", 
+       y = "PC1 (Social-Media-Intensity)") +
+  theme_minimal()
 ```
 
 ```{r}
 
 par(mfrow = c(2, 2))
 for (i in 1:4) {
-  barplot(cluster_centers[i, ], main = paste("Cluster", i, "Zentrum"), las = 2, col = "darkblue")
+  barplot(as.numeric(cluster_centers_df[i, ]), 
+          main = paste("Cluster", i, "Centrum"), 
+          xlab = "PCA-Components", 
+          ylab = "Value", 
+          las = 2, 
+          col = "darkblue")
 }
-par(mfrow = c(1, 1)) 
+par(mfrow = c(1, 1))  
+
 
 
 ```
