@@ -1,0 +1,390 @@
+---
+title: "midterm_project"
+format: html
+editor: visual
+---
+
+## Libraries:
+
+```{r}
+library(dplyr)
+library(lubridate)
+library(tidyr)
+library(factoextra)
+library(ggplot2)
+library(reshape2)
+library(cluster)
+
+
+```
+
+How does the use of social media influence mental health and well-being? How does the use of social media influence mental health? Is there a connection between usage time and factors such as distraction, restlessness or feelings of depression?
+
+```{r}
+data <- read.csv("~/Downloads/smmh.csv")
+
+```
+
+## Preprocessing:
+
+As there are only three people in the entire data set who did not use social media, it makes no sense to compare the two groups, as the non-users are completely underrepresented. Therefore, I filter the data set by social media users. (filter(X6..Do.you.use.social.media. == “Yes”)). In addition, I rename the variables to more understandable names. To measure mental health, I added all the variables together to create a new score. The higher the score, the worse the mental health. To be able to analyze differences within the platforms, I code the variable platform into a dummy variable.
+
+```{r}
+#| echo: false
+summary(data)
+str(data)
+
+data %>%
+  group_by(X6..Do.you.use.social.media.) %>%
+  summarise(count = n())
+
+data <- data %>%
+  filter(X6..Do.you.use.social.media. == "Yes")
+
+data_socialmedia <- data %>%
+  select(
+    platform = X7..What.social.media.platforms.do.you.commonly.use.,
+    time_on_sm = X8..What.is.the.average.time.you.spend.on.social.media.every.day.,  
+    usage_without_purpose = X9..How.often.do.you.find.yourself.using.Social.media.without.a.specific.purpose.,  
+    distraction = X10..How.often.do.you.get.distracted.by.Social.media.when.you.are.busy.doing.something.,  
+    restlessness = X11..Do.you.feel.restless.if.you.haven.t.used.Social.media.in.a.while.  
+  )
+
+```
+
+calculating mean mental health score
+
+```{r}
+data_mentalhealth <- data %>%
+  mutate(
+    Mental_Health_Score = rowMeans(select(., 
+      Worry_Level = X13..On.a.scale.of.1.to.5..how.much.are.you.bothered.by.worries., 
+      Concentration_Problems = X14..Do.you.find.it.difficult.to.concentrate.on.things., 
+      Social_Comparison = X15..On.a.scale.of.1.5..how.often.do.you.compare.yourself.to.other.successful.people.through.the.use.of.social.media., 
+      Emotional_Response = X16..Following.the.previous.question..how.do.you.feel.about.these.comparisons..generally.speaking.,  
+      Validation_Seeking = X17..How.often.do.you.look.to.seek.validation.from.features.of.social.media.,  
+      Depression = X18..How.often.do.you.feel.depressed.or.down.,  
+      Interest_Fluctuation = X19..On.a.scale.of.1.to.5..how.frequently.does.your.interest.in.daily.activities.fluctuate.,  
+      Sleep_Problems = X20..On.a.scale.of.1.to.5..how.often.do.you.face.issues.regarding.sleep.  
+    ))  
+  ) %>%
+  select(Mental_Health_Score) 
+
+
+final_data <- cbind(data_socialmedia, data_mentalhealth)
+
+
+```
+
+-   if platform appears in the string, then 1
+-   making time on social media numeric by taking the "middle"
+-   luckily we dont have any missing data
+
+```{r}
+final_data <- final_data %>%
+  mutate(
+    Facebook = ifelse(grepl("Facebook", platform), 1, 0),
+    Twitter = ifelse(grepl("Twitter", platform), 1, 0),
+    Instagram = ifelse(grepl("Instagram", platform), 1, 0),
+    YouTube = ifelse(grepl("YouTube", platform), 1, 0),
+    Discord = ifelse(grepl("Discord", platform), 1, 0),
+    Reddit = ifelse(grepl("Reddit", platform), 1, 0),
+    Pinterest = ifelse(grepl("Pinterest", platform), 1, 0),
+    TikTok = ifelse(grepl("TikTok", platform), 1, 0),
+    Snapchat = ifelse(grepl("Snapchat", platform), 1, 0),
+    time_on_sm = case_when(
+      time_on_sm == "Less than an Hour" ~ 0.5,
+      time_on_sm == "Between 1 and 2 hours" ~ 1.5,
+      time_on_sm == "Between 2 and 3 hours" ~ 2.5,
+      time_on_sm == "Between 3 and 4 hours" ~ 3.5,
+      time_on_sm == "Between 4 and 5 hours" ~ 4.5,
+      time_on_sm == "More than 5 hours" ~ 6
+    )
+  )
+
+
+final_data <- final_data %>%
+  mutate(across(c(usage_without_purpose, distraction, restlessness), as.numeric))
+final_data <- final_data %>%
+  select(-platform)  
+
+colSums(is.na(final_data))
+
+```
+
+## descriptive Analysis
+
+```{r}
+hist(final_data$time_on_sm, 
+     main = "Histogram: Time on Social Media per Day", 
+     xlab = "Hours", col = "lightblue", breaks = 10)
+
+```
+
+```{r}
+hist(final_data$Mental_Health_Score, 
+     main = "Histogram: Mental Health Score", 
+     xlab = "Score", col = "lightcoral", breaks = 10)
+
+```
+
+```{r}
+boxplot(Mental_Health_Score ~ time_on_sm, data = final_data,
+        main = "Mental Health Score vs. Time on Social Media",
+        xlab = "Time on Social media", ylab = "Mental Health Score", col = "lightcoral")
+      
+```
+
+```{r}
+barplot(colMeans(final_data[, c("Facebook", "Twitter", "Instagram", "YouTube", "Discord", "Reddit", "Pinterest", "TikTok", "Snapchat")]),
+        main = "Beliebtheit der Social Media Plattformen",
+        col = "skyblue", las = 2, ylab = "Durchschnittliche Nutzung (0 = nein, 1 = ja)")
+```
+
+```{r}
+
+
+desc_stats <- final_data %>%
+  summarise(across(where(is.numeric), 
+                   list(Mean = ~mean(., na.rm = TRUE),
+                        Median = ~median(., na.rm = TRUE),
+                        SD = ~sd(., na.rm = TRUE),
+                        Min = ~min(., na.rm = TRUE),
+                        Max = ~max(., na.rm = TRUE)),
+                   .names = "{col}_{fn}"))
+
+
+desc_stats_tidy <- desc_stats %>%
+  pivot_longer(everything(), 
+               names_to = c("Variable", "Stat"), 
+               names_pattern = "(.*)_(.*)",  
+               values_to = "Value") %>%
+  pivot_wider(names_from = Stat, values_from = Value)
+
+
+print(desc_stats_tidy)
+```
+
+At 3.5 hours a day, use is intensive, which leaves room for influences on mental health. The variability (SD = 1.75) shows that there are both frequent and occasional users, which makes subsequent analyses (e.g. correlation with Mental_Health_Score) interesting.Frequent use without purpose (Mean = 3.56) and distraction (Mean = 3.33) are more prominent than restlessness without use (Mean = 2.60). This could mean that social media acts as a source of distraction rather than creating dependency (restlessness). An average score of 3.07 indicates moderate impairment. The low dispersion (SD = 0.80) suggests that most respondents are similarly affected, which indicates a general trend.Platforms such as YouTube and Facebook dominate, indicating a broad target group. Platforms such as Twitter are less common, which could limit their relevance for mental health in this sample.
+
+-   now, that everything is numeric, i would like to check, if there is some correlation between the variables
+
+```{r}
+
+cor_matrix <- cor(final_data, use = "complete.obs")
+
+cor_data <- melt(cor_matrix)
+
+ggplot(cor_data, aes(Var1, Var2, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0) +
+  theme_minimal() +
+  labs(title = "correlationmatrix")
+
+```
+
+```{r}
+boxplot(Mental_Health_Score ~ distraction, data = final_data,
+        main = "Mental Health Score vs. Distraction trough Social Media",
+        xlab = "Distraction", ylab = "Mental Health Score", 
+        col = "lightblue")
+```
+
+-\> looks like, there is a relation between Distraction and the mental health score
+
+```{r}
+
+platform_health <- final_data %>%
+  summarise(across(c(Facebook:TikTok), ~mean(Mental_Health_Score[. == 1], na.rm = TRUE))) %>%
+  pivot_longer(everything(), names_to = "Platform", values_to = "Mean_Mental_Health_Score")
+
+ggplot(platform_health, aes(x = Platform, y = Mean_Mental_Health_Score, fill = Platform)) +
+  geom_bar(stat = "identity") +
+  theme_minimal() +
+  labs(title = "average mental health based on platform") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+-\> Tiktok user seem to have a little higher mental health score
+
+## PCA and Interpretation
+
+```{r}
+pca_data <- final_data %>%
+  select(-Mental_Health_Score)  
+
+pca_scaled <- scale(pca_data)
+
+pca <- prcomp(pca_scaled, center = TRUE, scale. = TRUE)
+summary(pca)
+
+for (i in 1:6) {
+  print(fviz_contrib(pca, choice = "var", axes = i, title = paste("Contributions to PC", i)))
+}
+
+```
+
+-   PC1 has the highest standard deviation (1.69) → means that PC1 explains the greatest variance in the data After that, the standard deviation decreases, which shows that the subsequent PCs contribute less to the total variance. Since the first 3 PCs have a much higher standard deviation, they are probably the most important principal components for PC1: time_on_sm, Instagram, Snapchat, distraction und restlessness have high values PC2: distraction und restlessness high values PC3: while Facebook and YouTube strong negative, is Reddit strong positive PC1 (‘Social Media Intensity’) measures high usage & distraction through highly interactive platforms PC2 (‘Mental stress’) could be related to emotional reaction to social media PC3 (‘Platform Usage Type’) differentiates between classic social networks (Facebook, YouTube) and discussion-orientated platforms (Reddit). PC4 represents a dimension that is strongly characterized by the use of certain niche or specialized platforms such as TikTok, Discord, YouTube and Pinterest, combined with usage without purpose (usage_without_purpose).Twitter, Discord, Snapchat, YouTube are the driving forces behind PC5. PC6 represents a dimension that is strongly characterized by visual and inspirational platforms such as Pinterest (visual content, inspiration), combined with platforms for short, often visual updates such as Twitter, Snapchat and Instagram. The participation of usage_without_purpose indicates that this usage often occurs without a specific purpose.
+
+The first three components explain about 47.8 % of the variance, while the first six components cover about 68.2 %, providing a good balance between information loss and complexity.
+
+```{r}
+
+fviz_screeplot(pca, addlabels = TRUE)
+
+```
+
+scree plot shows that PC1 (21.9%), PC2 (14.8%) and PC3 (11.1%) explain most of the variance (\~48%). To have a more detail analysis, im looking at the first 6 components, which explains of the (\~68.2 % Variance).I hope i can avoid overcomplexitiy and still remain enough information about the dataset.The scree plot shows a clear kink between PC3 and PC4, indicating that the first six components capture the most important patterns before the contribution of the other components decreases. By considering the first six components (\~68.2% variance), we can analyze the key dimensions of social media use (e.g., intensity, stress, platform type) that are potentially related to mental health
+
+```{r}
+
+df_pca <- data.frame(
+  PC1 = pca$x[,1], 
+  PC2 = pca$x[,2], 
+  PC3 = pca$x[,3], 
+  PC4 = pca$x[,4], 
+  PC5 = pca$x[,5], 
+  PC6 = pca$x[,6]
+)
+
+#PC1 vs. PC2
+ggplot(df_pca, aes(x = PC1, y = PC2)) +
+  geom_point(color = "blue") +
+  labs(title = "PCA: Distribution of Users (PC1 vs. PC2)", 
+       x = "PC1 (Social-Media-Intensity)", 
+       y = "PC2 (Mental Stress)") +
+  theme_minimal()
+
+#  PC3 vs. PC4
+ggplot(df_pca, aes(x = PC3, y = PC4)) +
+  geom_point(color = "green") +
+  labs(title = "PCA: Distribution of Users (PC3 vs. PC4)", 
+       x = "PC3 (Platform Usage Type)", 
+       y = "PC4 (TBD)") +  
+  theme_minimal()
+
+# PC5 vs. PC6
+ggplot(df_pca, aes(x = PC5, y = PC6)) +
+  geom_point(color = "purple") +
+  labs(title = "PCA: Distribution of Users (PC5 vs. PC6)", 
+       x = "PC5 (TBD)", 
+       y = "PC6 (TBD)") +  # Passe die Titel an, basierend auf deiner Interpretation
+  theme_minimal()
+
+```
+
+Pc1 vs.Pc2: difuse distribution, no clear patterns
+
+Pc3 vs. Pc4: Here, too, there are no clear clusters, but a diffuse distribution with a slight concentration around the zero point. Pc5 vs.Pc6:Similar to the other plots, there are no clear clusters, but an even distribution with a slight concentration around the zero point
+
+```{r}
+correlations <- sapply(1:6, function(i) {
+  cor(pca$x[,i], final_data$Mental_Health_Score, use = "complete.obs")
+})
+names(correlations) <- paste0("PC", 1:6)
+print(correlations)
+
+
+```
+
+There is a moderate to strong positive correlation between PC1 and Mental_Health_Score. This means that users with higher values in PC1 tend to have a poorer Mental_Health_Score (higher values = poorer mental health). Moderate positive correlation between PC2 and Mental_Health_Score. Users with higher values in PC2 also tend to have a poorer Mental_Health_Score. However, the correlation is weaker than with PC1. The correlation between PC3 and Mental_Health_Score is very weak and practically non-existent. Users with a preference for classic networks (Facebook, YouTube) or discussion-based platforms (Reddit) show no significant influence on their mental health.The correlation between PC4 and Mental_Health_Score is extremely weak and practically irrelevant. The use of specialized platforms has no significant impact on mental health. The correlation between PC5 and Mental_Health_Score is also very weak and not relevant. PC6 (-0.0240, negativ, almost null).\> no impact
+
+```{r}
+for (i in 1:6) {
+  p <- ggplot(data.frame(PC = pca$x[,i], MH_Score = final_data$Mental_Health_Score), 
+              aes(x = PC, y = MH_Score)) +
+    geom_point(color = ifelse(i == 1, "red", ifelse(i == 2, "blue", ifelse(i == 3, "green", ifelse(i == 4, "purple", ifelse(i == 5, "orange", "pink")))))) +
+    geom_smooth(method = "lm", color = "black") +
+    labs(title = paste0("PC", i, " vs. Mental Health Score"),
+         x = paste0("PC", i, " (TBD)"), y = "Mental Health Score") +
+    theme_minimal()
+  print(p)
+}
+```
+
+```{r}
+print(pca$rotation[, 1:6])
+```
+
+Insights: PC1: - High positive loadings: time_on_sm, distraction, restlessness, Instagram, Snapchat, TikTok -Moderate to strong correlation with poorer mental health (correlation = 0.4845) - Captures intensive use and distraction, especially on interactive platforms Pc2: - High positive charges: distraction, restlessness. - High negative charges: Twitter, Reddit, Discord. - Moderate correlation with poorer mental health (correlation = 0.3259). - Measures stress from distraction and restlessness, less from discussion-based platforms. pc3: - High positive charge: Reddit. - High negative charges: Facebook, YouTube. - No relevant connection with mental health (correlation = 0.0900) pc4: -High positive loads: TikTok, Pinterest. -High negative charges: YouTube, Discord. -No relevant connection with mental health (correlation = 0.0360) pc5: - High positive charges: Discord, Snapchat. - High negative charge: Twitter. - No relevant connection with mental health (correlation = 0.0328) pc6: - High positive charge: Pinterest. - High negative charges: Twitter, Snapchat. - No relevant correlation with mental health (correlation = -0.0240)
+
+```{r}
+model <- lm(Mental_Health_Score ~ pca$x[,1] + pca$x[,2] + pca$x[,3] + pca$x[,4] + pca$x[,5] + pca$x[,6], data = final_data)
+summary(model)
+
+```
+
+The model is statistically significant, but the explained variance is moderate (35%). There are other factors that could influence the mental health score (e.g. age, relationship, university vs high school). The F-statistic significance test shows that the model is statistically significant overall (p \< 0.001). This means that at least one of the PCA components has a significant influence on Mental_Health_Score. Pc1 is highly statistically significant (p \< 0.001), showing that intensive social media use (high time, distraction, restlessness, use of Instagram, Snapchat, TikTok) is strongly associated with poorer mental health. In PC2 there is an increase by 1 unit leads to an increase in Mental_Health_Score by 0.18838 units. This is also statistically highly significant (p \< 0.001), but shows a slightly weaker effect than PC1. An increase in PC3 by 1 unit leads to an increase in Mental_Health_Score by 0.06019 units. This is statistically significant (p \< 0.05), but the effect is very weak.PC4,Pc5,Pc6 are not statistically significant.
+
+## Clustering and Interpretation
+
+```{r}
+
+pca_data <- data.frame(PC1 = pca$x[,1], PC2 = pca$x[,2], PC3 = pca$x[,3])
+
+pca_scaled <- scale(pca_data)
+
+fviz_nbclust(pca_scaled, kmeans, method = "wss")
+
+fviz_nbclust(pca_scaled, kmeans, method = "silhouette")
+
+fviz_nbclust(pca_scaled, kmeans, method = "gap_stat", nboot = 500)
+
+
+
+```
+
+-\> all three methods (Elbow, Silhouette, Gap statistics) point to 4 clusters as the optimal choice
+
+```{r}
+
+final_data_scaled <- scale(final_data %>% select(-Mental_Health_Score)) 
+
+fit_kmeans <- kmeans(final_data_scaled, centers = 4, nstart = 100)
+
+fit_kmeans$cluster
+
+
+final_data$Cluster <- as.factor(fit_kmeans$cluster)
+
+silhouette_score <- silhouette(fit_kmeans$cluster, dist(final_data_scaled))
+mean(silhouette_score[, 3]) 
+
+```
+
+```{r}
+cluster_centers <- fit_kmeans$centers
+cluster_centers_df <- as.data.frame(cluster_centers)
+rownames(cluster_centers_df) <- paste("Cluster", 1:4)
+
+
+print(cluster_centers_df)
+
+```
+
+```{r}
+pca <- prcomp(final_data_scaled, center = TRUE, scale. = TRUE)
+
+pca_data <- data.frame(PC1 = pca$x[,1], PC2 = pca$x[,2], Cluster = final_data$Cluster)
+
+
+ggplot(pca_data, aes(x = PC1, y = PC2, color = Cluster)) +
+  geom_point(alpha = 0.7) +
+  labs(title = "PCA: Cluster Visualisierung", x = "PC1 (Social Media Nutzung)", y = "PC2 (Mentale Belastung)") +
+  theme_minimal()
+
+
+```
+
+```{r}
+
+par(mfrow = c(2, 2))
+for (i in 1:4) {
+  barplot(cluster_centers[i, ], main = paste("Cluster", i, "Zentrum"), las = 2, col = "darkblue")
+}
+par(mfrow = c(1, 1)) 
+
+
+```
+
+Interpretation: Cluster 1: - high values for time_on_sm, usage_without_purpose, distraction, restlessness - typical plattforms:
