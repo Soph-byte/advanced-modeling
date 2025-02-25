@@ -142,8 +142,6 @@ barplot(colMeans(final_data[, c("Facebook", "Twitter", "Instagram", "YouTube", "
 ```
 
 ```{r}
-
-
 desc_stats <- final_data %>%
   summarise(across(where(is.numeric), 
                    list(Mean = ~mean(., na.rm = TRUE),
@@ -337,7 +335,6 @@ fviz_nbclust(pca_scaled, kmeans, method = "gap_stat", nboot = 500)
 -\> all three methods (Elbow, Silhouette, Gap statistics) point to 4 clusters as the optimal choice
 
 ```{r}
-
 fit_kmeans <- kmeans(pca_scaled, centers = 4, nstart = 100)
 
 fit_kmeans$cluster
@@ -392,5 +389,32 @@ par(mfrow = c(1, 1))
 
 
 ```
+Interpretation:
+Cluster1:(High social media engagement & negative influence)
+- Medium values for usage_without_purpose (0.535), distraction (0.426) and restlessness (0.606).
+- Frequent Facebook (0.628) and moderate Twitter (0.326) usage.
+- (Low cluster centroid (-0.382) →  it may correlate to more social media approached negatively and our distraction + restlessness being high
 
-Interpretation: Cluster 1: - high values for time_on_sm, usage_without_purpose, distraction, restlessness - typical plattforms:
+Cluster 2 (Low usage, low impact):
+- Low values for usage_without_purpose (-0.238), distraction (-0.199) and restlessness (-0.084).
+- Facebook slightly negative, Twitter clearly negative (-0.547).
+- This indicates users who make little use of social media and are little influenced by it
+
+Cluster 3 (Moderately used, Twitter-dominated users):
+- Average values for usage_without_purpose (0.266) and distraction (0.268), low values for restlessness (0.136).
+- Facebook almost neutral (-0.075), but Twitter very high (0.845).
+- This cluster could include Twitter-savvy individuals who use social media moderately and are moderately affected by distraction
+
+Cluster 4 (Very low usage, low impact):
+- Very low values for usage_without_purpose (-0.653), distraction (-0.558) and restlessness (-0.702).
+- Low Facebook and Twitter usage.
+- People in this cluster seem to be hardly influenced by social media.
+
+## Conclusion
+The PCA analysis and clustering results lead to key findings.
+
+First, heavy social media use links to mental stress. Cluster 1 shows this clearly. These individuals use social media a lot, furthermore they show high levels of mental strain. "Purposeless use" and distraction specifically tie in closely with intense social media activity. Therefore too much use likely adds to anxiety and stress.
+
+Also different user groups exist with varied effects. Clusters 2 and 4 use social media less often. They also report fewer distractions and less mental burden. Cluster 3 stands out due to its different platform use - for example Twitter. It might have different effects than the other groups. Then again, usage without a clear goal increases negative effects. People who use social media without purpose experience more distraction and anxiety.
+Careful use has the potential to lessen bad mental impacts.
+The findings suggest heavy and disorganized social media use links to more mental stress, distraction, and restlessness. However there are different user groups with different results. Intentional social media use strategies might minimize negative effects.
